@@ -1,0 +1,88 @@
+name: Build T-Embed Firmware
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "src/**"
+      - "include/**"
+      - "boards/**"
+      - "scripts/**"
+      - "platformio.ini"
+      - "partitions.csv"
+      - ".github/workflows/build-firmware.yml"
+
+  pull_request:
+    paths:
+      - "src/**"
+      - "include/**"
+      - "boards/**"
+      - "scripts/**"
+      - "platformio.ini"
+      - "partitions.csv"
+      - ".github/workflows/build-firmware.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PlatformIO
+        run: python -m pip install --upgrade "platformio==6.1.18"
+
+      - name: Release source checks
+        run: python scripts/release_check.py
+
+      - name: Build firmware
+        run: pio run -e t_embed_cc1101_plus
+
+      - name: Verify build outputs
+        run: python scripts/verify_build_outputs.py
+
+      - name: Prepare M5Launcher binary
+        run: python scripts/prepare_m5launcher.py
+
+      - name: Collect release files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist
+
+          cp firmware.bin dist/
+          cp control-os-full.bin dist/
+          cp ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin dist/
+          cp ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin.sha256 dist/
+
+          cp platformio.ini dist/
+          cp partitions.csv dist/
+          cp README.md dist/
+          cp BUILD_STATUS.md dist/
+          cp M5LAUNCHER.md dist/
+
+          sha256sum \
+            dist/firmware.bin \
+            dist/control-os-full.bin \
+            dist/ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin \
+            | tee dist/SHA256SUMS.txt
+
+      - name: Upload firmware artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-os-t-embed-cc1101-plus
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
