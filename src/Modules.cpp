@@ -340,7 +340,7 @@ void HardwareServices::bleScanEntry(int index, char* output, std::size_t outputS
         safeCopy(output, outputSize, "-");
         return;
     }
-    const BLEAdvertisedDevice device = bleResults_.getDevice(index);
+    BLEAdvertisedDevice device = bleResults_.getDevice(index);
     const std::string name = device.haveName() ? device.getName() : std::string("<unnamed>");
     std::snprintf(output, outputSize, "%s  %d dBm", name.c_str(), device.getRSSI());
 }
