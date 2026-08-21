@@ -2,21 +2,8 @@ name: Build T-Embed Firmware
 
 on:
   workflow_dispatch:
-
   push:
-    branches:
-      - main
-      - master
-    paths:
-      - "src/**"
-      - "include/**"
-      - "boards/**"
-      - "scripts/**"
-      - "platformio.ini"
-      - "partitions.csv"
-      - ".github/workflows/build-firmware.yml"
-
-  pull_request:
+    branches: [main]
     paths:
       - "src/**"
       - "include/**"
@@ -28,7 +15,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -47,7 +34,29 @@ jobs:
         run: python scripts/release_check.py
 
       - name: Build firmware
-        run: pio run -e t_embed_cc1101_plus
+        id: pio_build
+        shell: bash
+        run: |
+          set +e
+          pio run -e t_embed_cc1101_plus -j 1 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+
+          if [ "$status" -ne 0 ]; then
+            echo
+            echo "========== COMPILER ERRORS =========="
+            grep -n -C 6 -E "(^|[[:space:]])(fatal error:|error:|undefined reference|collect2:|ld:)" build.log | tail -n 220 || true
+            echo "====================================="
+            exit "$status"
+          fi
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: control-os-build-log
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Verify build outputs
         run: python scripts/verify_build_outputs.py
@@ -59,25 +68,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           mkdir -p dist
-
           cp firmware.bin dist/
           cp control-os-full.bin dist/
           cp ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin dist/
           cp ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin.sha256 dist/
-
-          cp platformio.ini dist/
-          cp partitions.csv dist/
-          cp README.md dist/
-          cp BUILD_STATUS.md dist/
-          cp M5LAUNCHER.md dist/
-
           sha256sum \
             dist/firmware.bin \
             dist/control-os-full.bin \
             dist/ControlOS-TEmbed-CC1101-Plus-M5Launcher.bin \
-            | tee dist/SHA256SUMS.txt
+            > dist/SHA256SUMS.txt
 
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
